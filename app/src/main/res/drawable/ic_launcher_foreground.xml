@@ -1,0 +1,63 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Folder Back Flap -->
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M30,40 L44,40 L48,44 L78,44 C80.2,44 82,45.8 82,48 L82,74 C82,76.2 80.2,78 78,78 L30,78 C27.8,78 26,76.2 26,74 L26,44 C26,41.8 27.8,40 30,40 Z" />
+
+    <!-- Clean Document Inside Folder -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,30 L62,30 L70,38 L70,64 L38,64 Z" />
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M62,30 L62,38 L70,38 Z" />
+    <path
+        android:strokeColor="#CBD5E1"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M43,42 L57,42" />
+    <path
+        android:strokeColor="#CBD5E1"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M43,48 L65,48" />
+    <path
+        android:strokeColor="#CBD5E1"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M43,54 L55,54" />
+
+    <!-- Folder Front Cover (Layered) -->
+    <path
+        android:fillColor="#0EA5E9"
+        android:pathData="M26,48 L46,48 L50,52 L78,52 C80.2,52 82,53.8 82,56 L82,74 C82,76.2 80.2,78 78,78 L26,78 C23.8,78 22,76.2 22,74 L22,52 C22,49.8 23.8,48 26,48 Z" />
+
+    <!-- Folder Base Rim -->
+    <path
+        android:fillColor="#0369A1"
+        android:pathData="M22,72 L82,72 L82,74 C82,76.2 80.2,78 78,78 L26,78 C23.8,78 22,76.2 22,74 Z" />
+
+    <!-- Clean White Checkmark -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M44,63 L51,70 L65,56" />
+
+    <!-- Magic Star (Sparkle) - Primary Yellow -->
+    <path
+        android:fillColor="#FACC15"
+        android:pathData="M76,22 L77.8,26.2 L82,28 L77.8,29.8 L76,34 L74.2,29.8 L70,28 L74.2,26.2 Z" />
+
+    <!-- Small Sparkle - Cyan -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M32,25 L33.2,27.8 L36,29 L33.2,30.2 L32,33 L30.8,30.2 L28,29 L30.8,27.8 Z" />
+
+</vector>

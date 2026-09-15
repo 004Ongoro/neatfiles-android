@@ -1,0 +1,68 @@
+name: Build & Release NeatFiles APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build APK & Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare Release Asset
+        id: asset
+        run: |
+          mkdir -p release-output
+          VERSION="${GITHUB_REF_NAME:-v1.0.0}"
+          APK_FILE="release-output/NeatFiles-${VERSION}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$APK_FILE"
+          echo "apk_path=$APK_FILE" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ${{ steps.asset.outputs.apk_path }}
+          name: NeatFiles ${{ steps.asset.outputs.version }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          body: |
+            ## NeatFiles - Intelligent Android Downloads Manager
+
+            ### Features
+            - **Content Understanding**: Inspects PDF page counts, image dimensions, APK metadata, and temporary downloads.
+            - **1-Tap Cleanup**: Reclaims storage with exact SHA-256 duplicate detection and old file detection.
+            - **Smart Auto-Organize**: Automatically organizes loose files into categorized folders (`Documents/`, `Images/`, `APKs/`, `Archives/`).
+            - **Smart Renaming**: Cleans messy download titles and removes duplicate suffixes like `(1)`.
+            - **Storage Breakdown**: Visual charts and storage usage analysis.
+            - **Scheduled Background Cleanup**: Automated maintenance with Android WorkManager.
+            - **Guided Onboarding**: Permissions and feature setup wizard.
+
+            ### Installation
+            Download the `NeatFiles-${{ steps.asset.outputs.version }}.apk` below and install on any Android phone or emulator running Android 8.0+ (API 26+).

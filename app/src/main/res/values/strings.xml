@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">NeatFiles</string>
+    <string name="app_tagline">Intelligent Download &amp; File Manager</string>
+    <string name="downloads_title">Downloads</string>
+    <string name="review_cleanup">Review Cleanup</string>
+    <string name="safe_to_remove_banner">%1$d files may be safe to remove (%2$s)</string>
+    <string name="auto_organize">Auto-Organize</string>
+    <string name="smart_rename">Smart Rename</string>
+    <string name="find_duplicates">Find Duplicates</string>
+    <string name="storage_analysis">Storage Analysis</string>
+    <string name="permission_required_title">Storage Access Required</string>
+    <string name="permission_required_desc">NeatFiles needs All Files Access to inspect, categorize, and organize your Downloads folder safely.</string>
+    <string name="grant_permission">Grant Access</string>
+    <string name="demo_mode">Explore Demo Mode</string>
+</resources>

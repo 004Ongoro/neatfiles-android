@@ -234,8 +234,10 @@ class FileRepositoryImpl(
             val parent = source.parentFile ?: return@withContext Result.failure(IllegalStateException("Parent dir null"))
             var target = File(parent, newName)
 
-            // Resolve collision if target exists
-            if (target.exists() && target.absolutePath != source.absolutePath) {
+            val isCaseOnlyChange = source.name.equals(newName, ignoreCase = true) && source.name != newName
+
+            // Resolve collision if target exists for a different file
+            if (!isCaseOnlyChange && target.exists() && !target.canonicalPath.equals(source.canonicalPath, ignoreCase = true)) {
                 val base = newName.substringBeforeLast(".")
                 val ext = if (newName.contains(".")) ".${newName.substringAfterLast(".")}" else ""
                 var counter = 1
@@ -245,7 +247,31 @@ class FileRepositoryImpl(
                 }
             }
 
-            if (source.renameTo(target)) {
+            var renamed = false
+            if (isCaseOnlyChange) {
+                val tempTarget = File(parent, "tmp_neat_${System.currentTimeMillis()}_${newName}")
+                if (source.renameTo(tempTarget)) {
+                    renamed = tempTarget.renameTo(target)
+                }
+            } else {
+                renamed = source.renameTo(target)
+            }
+
+            if (!renamed) {
+                // Fallback stream copy + delete for scoped storage limitations
+                renamed = try {
+                    source.inputStream().use { input ->
+                        target.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    source.delete()
+                } catch (_: Exception) {
+                    false
+                }
+            }
+
+            if (renamed) {
                 MediaScannerConnection.scanFile(
                     context,
                     arrayOf(source.absolutePath, target.absolutePath),

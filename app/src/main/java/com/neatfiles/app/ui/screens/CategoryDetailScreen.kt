@@ -33,9 +33,11 @@ import com.neatfiles.app.core.model.FileCategory
 import com.neatfiles.app.core.model.NeatFile
 import com.neatfiles.app.core.util.Formatters
 import com.neatfiles.app.ui.components.AnimatedFeedbackState
+import com.neatfiles.app.ui.components.DeleteConfirmationDialog
 import com.neatfiles.app.ui.components.FeedbackType
 import com.neatfiles.app.ui.components.FileViewerDialog
 import com.neatfiles.app.ui.components.NeatFileCard
+import com.neatfiles.app.ui.components.SmartRenameDialog
 import com.neatfiles.app.ui.viewmodel.MainUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,10 +46,14 @@ fun CategoryDetailScreen(
     category: FileCategory,
     state: MainUiState,
     onBackClick: () -> Unit,
+    onDeleteFile: (NeatFile) -> Unit = {},
+    onRenameFile: (NeatFile, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var activeViewerFile by remember { mutableStateOf<NeatFile?>(null) }
+    var fileToRename by remember { mutableStateOf<NeatFile?>(null) }
+    var fileToDelete by remember { mutableStateOf<NeatFile?>(null) }
 
     val categoryFiles = state.allFiles.filter { it.category == category }
     val filteredFiles = if (searchQuery.isBlank()) {
@@ -128,6 +134,12 @@ fun CategoryDetailScreen(
                             file = file,
                             onItemClick = {
                                 activeViewerFile = file
+                            },
+                            onRenameClick = {
+                                fileToRename = file
+                            },
+                            onDeleteClick = {
+                                fileToDelete = file
                             }
                         )
                     }
@@ -140,7 +152,37 @@ fun CategoryDetailScreen(
     activeViewerFile?.let { file ->
         FileViewerDialog(
             file = file,
-            onDismiss = { activeViewerFile = null }
+            onDismiss = { activeViewerFile = null },
+            onRenameClick = {
+                activeViewerFile = null
+                fileToRename = file
+            },
+            onDeleteClick = {
+                activeViewerFile = null
+                fileToDelete = file
+            }
+        )
+    }
+
+    // Smart Rename Dialog
+    fileToRename?.let { file ->
+        SmartRenameDialog(
+            file = file,
+            onDismiss = { fileToRename = null },
+            onConfirmRename = { newName ->
+                onRenameFile(file, newName)
+            }
+        )
+    }
+
+    // Delete Confirmation Dialog
+    fileToDelete?.let { file ->
+        DeleteConfirmationDialog(
+            file = file,
+            onDismiss = { fileToDelete = null },
+            onConfirmDelete = {
+                onDeleteFile(file)
+            }
         )
     }
 }

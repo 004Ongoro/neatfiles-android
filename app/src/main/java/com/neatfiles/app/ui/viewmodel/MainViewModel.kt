@@ -215,14 +215,66 @@ class MainViewModel(
         }
     }
 
-    fun applySmartRename(item: SmartRenameItem) {
+    fun deleteSingleFile(file: NeatFile) {
         viewModelScope.launch {
-            fileRepository.renameFile(item.file, item.suggestedName).onSuccess {
-                _events.emit(UiEvent.ShowMessage("Renamed to ${item.suggestedName}"))
+            val result = fileRepository.deleteFiles(listOf(file))
+            result.onSuccess { count ->
+                if (count > 0) {
+                    _events.emit(UiEvent.ShowMessage("Deleted ${file.name}"))
+                } else {
+                    _uiState.update { it.copy(userMessage = "Could not delete ${file.name}") }
+                }
+                scanDownloads()
+            }.onFailure { error ->
+                _uiState.update { it.copy(userMessage = "Delete failed: ${error.message}") }
+            }
+        }
+    }
+
+    fun renameSingleFile(file: NeatFile, newName: String) {
+        viewModelScope.launch {
+            val cleanTargetName = newName.trim()
+            if (cleanTargetName.isEmpty() || cleanTargetName == file.name) return@launch
+            fileRepository.renameFile(file, cleanTargetName).onSuccess { renamed ->
+                _events.emit(UiEvent.ShowMessage("Renamed to ${renamed.name}"))
                 scanDownloads()
             }.onFailure { error ->
                 _uiState.update { it.copy(userMessage = "Rename failed: ${error.message}") }
             }
+        }
+    }
+
+    fun applySmartRename(item: SmartRenameItem, customName: String? = null) {
+        val targetName = customName?.trim()?.ifEmpty { null } ?: item.suggestedName
+        viewModelScope.launch {
+            fileRepository.renameFile(item.file, targetName).onSuccess {
+                _events.emit(UiEvent.ShowMessage("Renamed to $targetName"))
+                scanDownloads()
+            }.onFailure { error ->
+                _uiState.update { it.copy(userMessage = "Rename failed: ${error.message}") }
+            }
+        }
+    }
+
+    fun applyBatchRename(items: List<Pair<SmartRenameItem, String>>, onComplete: ((Int) -> Unit)? = null) {
+        if (items.isEmpty()) {
+            onComplete?.invoke(0)
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            var successCount = 0
+            for ((item, customName) in items) {
+                val targetName = customName.trim().ifEmpty { item.suggestedName }
+                val res = fileRepository.renameFile(item.file, targetName)
+                if (res.isSuccess) {
+                    successCount++
+                }
+            }
+            _uiState.update { it.copy(isLoading = false) }
+            _events.emit(UiEvent.ShowMessage("Successfully renamed $successCount files!"))
+            scanDownloads()
+            onComplete?.invoke(successCount)
         }
     }
 

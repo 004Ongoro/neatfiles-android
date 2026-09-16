@@ -53,7 +53,10 @@ import androidx.compose.ui.unit.dp
 import com.neatfiles.app.core.model.CleanupReason
 import com.neatfiles.app.core.model.NeatFile
 import com.neatfiles.app.core.util.Formatters
+import com.neatfiles.app.ui.components.DeleteConfirmationDialog
+import com.neatfiles.app.ui.components.FileViewerDialog
 import com.neatfiles.app.ui.components.NeatFileCard
+import com.neatfiles.app.ui.components.SmartRenameDialog
 import com.neatfiles.app.ui.viewmodel.MainUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,11 +68,16 @@ fun CleanupReviewScreen(
     onSelectAll: (CleanupReason?) -> Unit,
     onDeselectAll: (CleanupReason?) -> Unit,
     onExecuteCleanup: () -> Unit,
+    onDeleteSingleFile: (NeatFile) -> Unit = {},
+    onRenameSingleFile: (NeatFile, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val overview = state.storageOverview?.cleanupOverview
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var showConfirmDialog by remember { mutableStateOf(false) }
+    var activeViewerFile by remember { mutableStateOf<NeatFile?>(null) }
+    var fileToRename by remember { mutableStateOf<NeatFile?>(null) }
+    var fileToDelete by remember { mutableStateOf<NeatFile?>(null) }
 
     val tabs = listOf(
         "All (${overview?.totalSafeToRemoveCount ?: 0})",
@@ -246,7 +254,16 @@ fun CleanupReviewScreen(
                         NeatFileCard(
                             file = file,
                             isSelected = file.id in state.selectedCleanupIds,
-                            onSelectionChange = { onToggleSelection(file.id) }
+                            onSelectionChange = { onToggleSelection(file.id) },
+                            onItemClick = {
+                                activeViewerFile = file
+                            },
+                            onRenameClick = {
+                                fileToRename = file
+                            },
+                            onDeleteClick = {
+                                fileToDelete = file
+                            }
                         )
                     }
                 }
@@ -278,6 +295,44 @@ fun CleanupReviewScreen(
                 OutlinedButton(onClick = { showConfirmDialog = false }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    // In-App File Viewer Dialog
+    activeViewerFile?.let { file ->
+        FileViewerDialog(
+            file = file,
+            onDismiss = { activeViewerFile = null },
+            onRenameClick = {
+                activeViewerFile = null
+                fileToRename = file
+            },
+            onDeleteClick = {
+                activeViewerFile = null
+                fileToDelete = file
+            }
+        )
+    }
+
+    // Smart Rename Dialog
+    fileToRename?.let { file ->
+        SmartRenameDialog(
+            file = file,
+            onDismiss = { fileToRename = null },
+            onConfirmRename = { newName ->
+                onRenameSingleFile(file, newName)
+            }
+        )
+    }
+
+    // Delete Confirmation Dialog
+    fileToDelete?.let { file ->
+        DeleteConfirmationDialog(
+            file = file,
+            onDismiss = { fileToDelete = null },
+            onConfirmDelete = {
+                onDeleteSingleFile(file)
             }
         )
     }

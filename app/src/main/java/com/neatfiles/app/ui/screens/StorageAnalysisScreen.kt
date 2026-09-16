@@ -37,10 +37,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.neatfiles.app.core.model.NeatFile
 import com.neatfiles.app.core.util.Formatters
+import com.neatfiles.app.ui.components.DeleteConfirmationDialog
+import com.neatfiles.app.ui.components.FileViewerDialog
 import com.neatfiles.app.ui.components.NeatFileCard
+import com.neatfiles.app.ui.components.SmartRenameDialog
 import com.neatfiles.app.ui.viewmodel.MainUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,8 +56,14 @@ import com.neatfiles.app.ui.viewmodel.MainUiState
 fun StorageAnalysisScreen(
     state: MainUiState,
     onBackClick: () -> Unit,
+    onDeleteFile: (NeatFile) -> Unit = {},
+    onRenameFile: (NeatFile, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
+    var activeViewerFile by remember { mutableStateOf<NeatFile?>(null) }
+    var fileToRename by remember { mutableStateOf<NeatFile?>(null) }
+    var fileToDelete by remember { mutableStateOf<NeatFile?>(null) }
+
     val overview = state.storageOverview
     val totalDevice = overview?.totalDeviceStorageBytes ?: (128L * 1024 * 1024 * 1024)
     val usedDevice = overview?.usedDeviceStorageBytes ?: (84L * 1024 * 1024 * 1024)
@@ -219,8 +233,57 @@ fun StorageAnalysisScreen(
             }
 
             items(largestFiles, key = { it.id }) { file ->
-                NeatFileCard(file = file)
+                NeatFileCard(
+                    file = file,
+                    onItemClick = {
+                        activeViewerFile = file
+                    },
+                    onRenameClick = {
+                        fileToRename = file
+                    },
+                    onDeleteClick = {
+                        fileToDelete = file
+                    }
+                )
             }
         }
+    }
+
+    // In-App File Viewer Dialog
+    activeViewerFile?.let { file ->
+        FileViewerDialog(
+            file = file,
+            onDismiss = { activeViewerFile = null },
+            onRenameClick = {
+                activeViewerFile = null
+                fileToRename = file
+            },
+            onDeleteClick = {
+                activeViewerFile = null
+                fileToDelete = file
+            }
+        )
+    }
+
+    // Smart Rename Dialog
+    fileToRename?.let { file ->
+        SmartRenameDialog(
+            file = file,
+            onDismiss = { fileToRename = null },
+            onConfirmRename = { newName ->
+                onRenameFile(file, newName)
+            }
+        )
+    }
+
+    // Delete Confirmation Dialog
+    fileToDelete?.let { file ->
+        DeleteConfirmationDialog(
+            file = file,
+            onDismiss = { fileToDelete = null },
+            onConfirmDelete = {
+                onDeleteFile(file)
+            }
+        )
     }
 }

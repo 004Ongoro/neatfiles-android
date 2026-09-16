@@ -189,7 +189,9 @@ fun NeatFilesAppRoot(
                     onExecuteCleanup = {
                         viewModel.executeCleanup()
                         navController.popBackStack()
-                    }
+                    },
+                    onDeleteSingleFile = { file -> viewModel.deleteSingleFile(file) },
+                    onRenameSingleFile = { file, newName -> viewModel.renameSingleFile(file, newName) }
                 )
             }
 
@@ -206,7 +208,9 @@ fun NeatFilesAppRoot(
                 CategoryDetailScreen(
                     category = category,
                     state = state,
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    onDeleteFile = { file -> viewModel.deleteSingleFile(file) },
+                    onRenameFile = { file, newName -> viewModel.renameSingleFile(file, newName) }
                 )
             }
 
@@ -224,14 +228,17 @@ fun NeatFilesAppRoot(
                 SmartRenameScreen(
                     state = state,
                     onBackClick = { navController.popBackStack() },
-                    onApplyRename = { item -> viewModel.applySmartRename(item) }
+                    onApplyRename = { item, customName -> viewModel.applySmartRename(item, customName) },
+                    onBatchRename = { batch -> viewModel.applyBatchRename(batch) }
                 )
             }
 
             composable("storage_analysis") {
                 StorageAnalysisScreen(
                     state = state,
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    onDeleteFile = { file -> viewModel.deleteSingleFile(file) },
+                    onRenameFile = { file, newName -> viewModel.renameSingleFile(file, newName) }
                 )
             }
 

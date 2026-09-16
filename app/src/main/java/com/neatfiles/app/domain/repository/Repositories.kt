@@ -13,7 +13,6 @@ interface FileRepository {
     suspend fun renameFile(file: NeatFile, newName: String): Result<NeatFile>
     suspend fun organizeFiles(plans: List<OrganizePlan>): Result<Int>
     suspend fun getStorageOverview(): StorageOverview
-    suspend fun createSampleTestFiles(): Result<Int>
     fun hasStoragePermission(): Boolean
 }
 

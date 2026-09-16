@@ -3,12 +3,9 @@ package com.neatfiles.app.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -33,7 +30,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.neatfiles.app.core.model.FileCategory
+import com.neatfiles.app.core.model.NeatFile
 import com.neatfiles.app.core.util.Formatters
+import com.neatfiles.app.ui.components.AnimatedFeedbackState
+import com.neatfiles.app.ui.components.FeedbackType
+import com.neatfiles.app.ui.components.FileViewerDialog
 import com.neatfiles.app.ui.components.NeatFileCard
 import com.neatfiles.app.ui.viewmodel.MainUiState
 
@@ -46,6 +47,7 @@ fun CategoryDetailScreen(
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
+    var activeViewerFile by remember { mutableStateOf<NeatFile?>(null) }
 
     val categoryFiles = state.allFiles.filter { it.category == category }
     val filteredFiles = if (searchQuery.isBlank()) {
@@ -89,29 +91,56 @@ fun CategoryDetailScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Search Input
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text("Search ${category.displayName}...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                shape = MaterialTheme.shapes.medium
-            )
+            // Search Input (shown when category has items)
+            if (categoryFiles.isNotEmpty()) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    placeholder = { Text("Search in ${category.displayName}...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.medium
+                )
+            }
 
-            // List of category files
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(filteredFiles, key = { it.id }) { file ->
-                    NeatFileCard(file = file)
+            // File Content List or Empty State
+            if (filteredFiles.isEmpty()) {
+                AnimatedFeedbackState(
+                    feedback = FeedbackType.Empty(
+                        title = if (searchQuery.isNotBlank()) "No Matching Files" else "No ${category.displayName} Found",
+                        description = if (searchQuery.isNotBlank()) "No files match '$searchQuery' in this category." else "There are currently no files categorized as ${category.displayName} in your Downloads folder.",
+                        actionLabel = "Back to Dashboard"
+                    ),
+                    onPrimaryAction = onBackClick,
+                    modifier = Modifier.padding(top = 40.dp)
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filteredFiles, key = { it.id }) { file ->
+                        NeatFileCard(
+                            file = file,
+                            onItemClick = {
+                                activeViewerFile = file
+                            }
+                        )
+                    }
                 }
             }
         }
+    }
+
+    // In-App File Viewer Dialog
+    activeViewerFile?.let { file ->
+        FileViewerDialog(
+            file = file,
+            onDismiss = { activeViewerFile = null }
+        )
     }
 }

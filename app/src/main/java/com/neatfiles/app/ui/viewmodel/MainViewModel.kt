@@ -71,6 +71,17 @@ class MainViewModel(
     fun checkPermission() {
         val hasPermission = fileRepository.hasStoragePermission()
         _uiState.update { it.copy(hasStoragePermission = hasPermission) }
+        if (!hasPermission) {
+            _uiState.update {
+                it.copy(
+                    allFiles = emptyList(),
+                    storageOverview = null,
+                    organizePlans = emptyList(),
+                    smartRenameList = emptyList(),
+                    selectedCleanupIds = emptySet()
+                )
+            }
+        }
     }
 
     private fun observePreferences() {
@@ -109,6 +120,21 @@ class MainViewModel(
 
     fun scanDownloads() {
         viewModelScope.launch {
+            if (!fileRepository.hasStoragePermission()) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        hasStoragePermission = false,
+                        storageOverview = null,
+                        allFiles = emptyList(),
+                        organizePlans = emptyList(),
+                        smartRenameList = emptyList(),
+                        selectedCleanupIds = emptySet()
+                    )
+                }
+                return@launch
+            }
+
             _uiState.update { it.copy(isLoading = true) }
             try {
                 val overview = scanDownloadsUseCase()
@@ -182,6 +208,7 @@ class MainViewModel(
             result.onSuccess { count ->
                 _uiState.update { it.copy(isLoading = false, selectedCleanupIds = emptySet()) }
                 _events.emit(UiEvent.CleanupCompleted(count, reclaimedBytes))
+                scanDownloads()
             }.onFailure { error ->
                 _uiState.update { it.copy(isLoading = false, userMessage = "Cleanup failed: ${error.message}") }
             }
@@ -192,15 +219,19 @@ class MainViewModel(
         viewModelScope.launch {
             fileRepository.renameFile(item.file, item.suggestedName).onSuccess {
                 _events.emit(UiEvent.ShowMessage("Renamed to ${item.suggestedName}"))
+                scanDownloads()
             }.onFailure { error ->
                 _uiState.update { it.copy(userMessage = "Rename failed: ${error.message}") }
             }
         }
     }
 
-    fun executeAutoOrganize() {
+    fun executeAutoOrganize(onComplete: ((Result<Int>) -> Unit)? = null) {
         val plans = _uiState.value.organizePlans
-        if (plans.isEmpty()) return
+        if (plans.isEmpty()) {
+            onComplete?.invoke(Result.success(0))
+            return
+        }
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
@@ -208,8 +239,11 @@ class MainViewModel(
             result.onSuccess { moved ->
                 _uiState.update { it.copy(isLoading = false) }
                 _events.emit(UiEvent.OrganizeCompleted(moved))
+                scanDownloads()
+                onComplete?.invoke(Result.success(moved))
             }.onFailure { error ->
                 _uiState.update { it.copy(isLoading = false, userMessage = "Organize failed: ${error.message}") }
+                onComplete?.invoke(Result.failure(error))
             }
         }
     }
@@ -242,18 +276,6 @@ class MainViewModel(
     fun resetOnboarding() {
         viewModelScope.launch {
             preferencesRepository.setOnboardingCompleted(false)
-        }
-    }
-
-    fun generateSampleFiles() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            val result = fileRepository.createSampleTestFiles()
-            result.onSuccess { count ->
-                _events.emit(UiEvent.ShowMessage("Generated $count sample download files for testing!"))
-            }.onFailure { err ->
-                _uiState.update { it.copy(isLoading = false, userMessage = "Failed creating samples: ${err.message}") }
-            }
         }
     }
 

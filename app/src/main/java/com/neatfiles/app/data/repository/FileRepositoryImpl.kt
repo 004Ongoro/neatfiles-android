@@ -291,17 +291,35 @@ class FileRepositoryImpl(
                         }
                     }
 
-                    try {
+                    val moved = try {
                         Files.move(source.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                        true
+                    } catch (_: Exception) {
+                        if (source.renameTo(dest)) {
+                            true
+                        } else {
+                            try {
+                                source.inputStream().use { input ->
+                                    dest.outputStream().use { output ->
+                                        input.copyTo(output)
+                                    }
+                                }
+                                if (dest.exists() && dest.length() == source.length()) {
+                                    source.delete()
+                                    true
+                                } else {
+                                    false
+                                }
+                            } catch (_: Exception) {
+                                false
+                            }
+                        }
+                    }
+
+                    if (moved) {
                         scannedPaths.add(source.absolutePath)
                         scannedPaths.add(dest.absolutePath)
                         movedCount++
-                    } catch (_: Exception) {
-                        if (source.renameTo(dest)) {
-                            scannedPaths.add(source.absolutePath)
-                            scannedPaths.add(dest.absolutePath)
-                            movedCount++
-                        }
                     }
                 }
             }
@@ -315,85 +333,6 @@ class FileRepositoryImpl(
         } catch (e: Exception) {
             Result.failure(e)
         }
-    }
-
-    override suspend fun createSampleTestFiles(): Result<Int> = withContext(Dispatchers.IO) {
-        try {
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            if (!downloadsDir.exists()) downloadsDir.mkdirs()
-
-            var count = 0
-            val now = System.currentTimeMillis()
-            val dayMillis = 24L * 3600 * 1000
-
-            // 1. Legitimate PDF dummy files with SHA-256 duplicate copies
-            val pdfContent = ("%PDF-1.4\n1 0 obj\n<< /Title (Annual Financial Statement 2024) >>\nendobj\n" +
-                    "2 0 obj\n<< /Type /Pages /Count 5 /Kids [] >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF").toByteArray()
-
-            val pdf1 = File(downloadsDir, "Financial_Report_Q3_2024.pdf")
-            val pdf2 = File(downloadsDir, "Financial_Report_Q3_2024(1).pdf")
-            val pdf3 = File(downloadsDir, "Financial_Report_Q3_2024 - Copy.pdf")
-            writeBytes(pdf1, pdfContent).also { count++ }
-            writeBytes(pdf2, pdfContent).also { count++ } // Exact SHA-256 duplicate!
-            writeBytes(pdf3, pdfContent).also { count++ } // Another duplicate!
-
-            // 2. Old file (>45 days old)
-            val oldPdf = File(downloadsDir, "tax_assessment_notice_2023.pdf")
-            writeBytes(oldPdf, ("%PDF-1.4 Tax Document").toByteArray())
-            oldPdf.setLastModified(now - (45 * dayMillis))
-            count++
-
-            // 3. Image files with messy names for smart renaming
-            val imgHeader = byteArrayOf(
-                0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte(), 0x00, 0x10,
-                0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
-                0x00, 0x01, 0x00, 0x00, 0xFF.toByte(), 0xD9.toByte()
-            )
-            val img1 = File(downloadsDir, "IMG_20230915_WA0002(1).jpg")
-            val img2 = File(downloadsDir, "screenshot_20240115-182300.png")
-            val img3 = File(downloadsDir, "photo_holiday_beach_trip.jpg")
-            writeBytes(img1, imgHeader).also { count++ }
-            writeBytes(img2, imgHeader).also { count++ }
-            writeBytes(img3, imgHeader).also { count++ }
-
-            // 4. Temporary/Incomplete downloads
-            val crdownload = File(downloadsDir, "heavy_installer_package.crdownload")
-            writeBytes(crdownload, "Partial stream download data...".toByteArray()).also { count++ }
-
-            val tmpFile = File(downloadsDir, "cache_temp_buffer_9182.tmp")
-            writeBytes(tmpFile, "Temporary buffer cache data...".toByteArray()).also { count++ }
-
-            // 5. Installer APK file (>10 days old)
-            val apk = File(downloadsDir, "media_player_setup_v2.4(1).apk")
-            writeBytes(apk, "PK\u0003\u0004DummyApkZipStream".toByteArray())
-            apk.setLastModified(now - (12 * dayMillis))
-            count++
-
-            // 6. Archives and Code
-            val zip = File(downloadsDir, "project_assets_backup.zip")
-            writeBytes(zip, "PK\u0003\u0004DummyZipArchive".toByteArray()).also { count++ }
-
-            val code = File(downloadsDir, "database_migration_script.py")
-            writeBytes(code, "# Python database script\nimport os\nprint('Migrating')".toByteArray()).also { count++ }
-
-            // Notify media scanner
-            val filesList = listOf(pdf1, pdf2, pdf3, oldPdf, img1, img2, img3, crdownload, tmpFile, apk, zip, code)
-            MediaScannerConnection.scanFile(
-                context,
-                filesList.map { it.absolutePath }.toTypedArray(),
-                null,
-                null
-            )
-
-            scanDownloads()
-            Result.success(count)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    private fun writeBytes(file: File, bytes: ByteArray) {
-        FileOutputStream(file).use { it.write(bytes) }
     }
 
     override suspend fun getStorageOverview(): StorageOverview {

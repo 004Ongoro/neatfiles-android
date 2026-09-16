@@ -32,6 +32,7 @@ import com.neatfiles.app.core.util.Formatters
 import com.neatfiles.app.ui.screens.CategoryDetailScreen
 import com.neatfiles.app.ui.screens.CleanupReviewScreen
 import com.neatfiles.app.ui.screens.DashboardScreen
+import com.neatfiles.app.ui.screens.LicensesScreen
 import com.neatfiles.app.ui.screens.OnboardingScreen
 import com.neatfiles.app.ui.screens.SettingsScreen
 import com.neatfiles.app.ui.screens.SmartOrganizerScreen
@@ -152,7 +153,6 @@ fun NeatFilesAppRoot(
                     },
                     onThresholdChange = { days -> viewModel.setOldFileThreshold(days) },
                     onToggleScheduledCleanup = { enabled -> viewModel.toggleScheduledCleanup(enabled) },
-                    onGenerateSampleFiles = { viewModel.generateSampleFiles() },
                     onCheckPermissions = {
                         viewModel.checkPermission()
                         viewModel.scanDownloads()
@@ -175,8 +175,7 @@ fun NeatFilesAppRoot(
                         viewModel.checkPermission()
                         viewModel.scanDownloads()
                     },
-                    onRequestStoragePermission = onRequestStoragePermission,
-                    onGenerateSampleFiles = { viewModel.generateSampleFiles() }
+                    onRequestStoragePermission = onRequestStoragePermission
                 )
             }
 
@@ -215,9 +214,8 @@ fun NeatFilesAppRoot(
                 SmartOrganizerScreen(
                     state = state,
                     onBackClick = { navController.popBackStack() },
-                    onOrganizeClick = {
-                        viewModel.executeAutoOrganize()
-                        navController.popBackStack()
+                    onOrganizeClick = { onComplete ->
+                        viewModel.executeAutoOrganize(onComplete)
                     }
                 )
             }
@@ -247,7 +245,13 @@ fun NeatFilesAppRoot(
                         viewModel.resetOnboarding()
                         navController.navigate("onboarding")
                     },
-                    onGenerateSampleFiles = { viewModel.generateSampleFiles() }
+                    onLicensesClick = { navController.navigate("licenses") }
+                )
+            }
+
+            composable("licenses") {
+                LicensesScreen(
+                    onBackClick = { navController.popBackStack() }
                 )
             }
         }

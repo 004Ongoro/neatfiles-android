@@ -67,7 +67,6 @@ fun DashboardScreen(
     onSettingsClick: () -> Unit,
     onRefreshClick: () -> Unit,
     onRequestStoragePermission: () -> Unit,
-    onGenerateSampleFiles: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -240,13 +239,13 @@ fun DashboardScreen(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(20.dp),
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                             )
                         ) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(20.dp),
+                                    .padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Icon(
@@ -257,25 +256,17 @@ fun DashboardScreen(
                                 )
                                 Spacer(modifier = Modifier.height(10.dp))
                                 Text(
-                                    text = "Downloads Folder is Empty",
+                                    text = "Downloads Folder is Empty & Clean",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "No files found in Downloads. You can generate sample test files to try all features on real storage.",
+                                    text = "No files found in Downloads. As you download documents, images, and files, NeatFiles will automatically analyze, detect duplicates, and organize them here.",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
-                                Spacer(modifier = Modifier.height(14.dp))
-                                Button(
-                                    onClick = onGenerateSampleFiles,
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Generate Sample Download Files")
-                                }
                             }
                         }
                     }

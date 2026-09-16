@@ -5,13 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,7 +33,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
@@ -55,7 +51,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -66,7 +61,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -85,7 +79,6 @@ fun OnboardingScreen(
     onCompleteOnboarding: () -> Unit,
     onThresholdChange: (Int) -> Unit,
     onToggleScheduledCleanup: (Boolean) -> Unit,
-    onGenerateSampleFiles: () -> Unit,
     onCheckPermissions: () -> Unit
 ) {
     var currentStep by remember { mutableIntStateOf(0) }
@@ -93,7 +86,7 @@ fun OnboardingScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Live permission check whenever user returns to the app from Settings
+    // Live permission check whenever user returns to the app from System Settings
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -102,6 +95,11 @@ fun OnboardingScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val canProceed = when (currentStep) {
+        1 -> state.hasStoragePermission
+        else -> true
     }
 
     Box(
@@ -116,7 +114,7 @@ fun OnboardingScreen(
                 .fillMaxSize()
                 .padding(24.dp)
         ) {
-            // Top Bar with progress indicators
+            // Top Bar with progress indicators (No Skip button allowed)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -152,13 +150,8 @@ fun OnboardingScreen(
                     }
                 }
 
-                if (currentStep < totalSteps - 1) {
-                    TextButton(onClick = { currentStep = totalSteps - 1 }) {
-                        Text("Skip")
-                    }
-                } else {
-                    Spacer(modifier = Modifier.width(48.dp))
-                }
+                // Balanced spacer - users MUST complete onboarding and permissions
+                Spacer(modifier = Modifier.width(48.dp))
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -181,12 +174,11 @@ fun OnboardingScreen(
                         thresholdDays = state.oldFileThresholdDays,
                         scheduledEnabled = state.isScheduledCleanupEnabled,
                         onThresholdChange = onThresholdChange,
-                        onToggleScheduled = onToggleScheduledCleanup,
-                        onGenerateSamples = onGenerateSampleFiles
+                        onToggleScheduled = onToggleScheduledCleanup
                     )
                     3 -> OnboardingReadyStep(
                         state = state,
-                        onComplete = onCompleteOnboarding
+                        onRedirectToPermissions = { currentStep = 1 }
                     )
                 }
             }
@@ -199,28 +191,53 @@ fun OnboardingScreen(
                 horizontalArrangement = Arrangement.End
             ) {
                 if (currentStep < totalSteps - 1) {
-                    Button(
-                        onClick = { currentStep++ },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Text("Continue", modifier = Modifier.padding(vertical = 4.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        if (currentStep == 1 && !state.hasStoragePermission) {
+                            Text(
+                                text = "All Files Access is required to continue.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp)
+                            )
+                        }
+
+                        Button(
+                            onClick = { currentStep++ },
+                            enabled = canProceed,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("Continue", modifier = Modifier.padding(vertical = 4.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                        }
                     }
                 } else {
                     Button(
-                        onClick = onCompleteOnboarding,
+                        onClick = {
+                            if (!state.hasStoragePermission) {
+                                currentStep = 1
+                            } else {
+                                onCompleteOnboarding()
+                            }
+                        },
+                        enabled = state.hasStoragePermission,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.primary
                         )
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = null)
+                        Icon(
+                            if (state.hasStoragePermission) Icons.Default.Check else Icons.Default.Lock,
+                            contentDescription = null
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            "Start Tidying Downloads",
+                            text = if (state.hasStoragePermission) "Start Tidying Downloads" else "Storage Permission Required",
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
@@ -237,7 +254,6 @@ private fun OnboardingWelcomeStep() {
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxWidth()
     ) {
-        // App Hero Badge
         Surface(
             modifier = Modifier.size(96.dp),
             shape = RoundedCornerShape(28.dp),
@@ -275,11 +291,10 @@ private fun OnboardingWelcomeStep() {
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Feature cards
         FeatureRow(
             icon = Icons.Default.Star,
             title = "Content Understanding",
-            description = "Inspects PDF page counts, image dimensions, APK metadata, and detects unfinished downloads."
+            description = "Inspects PDF metadata, image dimensions, APK details, and detects incomplete downloads."
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -287,7 +302,7 @@ private fun OnboardingWelcomeStep() {
         FeatureRow(
             icon = Icons.Default.Delete,
             title = "Duplicate & Clutter Detection",
-            description = "Calculates SHA-256 hashes to find identical duplicate downloads and safely reclaim storage."
+            description = "Calculates SHA-256 hashes to identify redundant duplicate downloads and safely reclaim storage."
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -295,7 +310,7 @@ private fun OnboardingWelcomeStep() {
         FeatureRow(
             icon = Icons.Default.Folder,
             title = "Smart Auto-Organization",
-            description = "Automatically organizes loose files into clean category folders (Documents, Images, APKs, Archives)."
+            description = "Automatically categorizes loose files into clean folders (Documents, Images, APKs, Archives)."
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -303,7 +318,7 @@ private fun OnboardingWelcomeStep() {
         FeatureRow(
             icon = Icons.Default.Refresh,
             title = "Smart Renaming Engine",
-            description = "Removes duplicate markers like '(1)' and formats messy filenames into clean, readable titles."
+            description = "Removes ugly duplicate markers like '(1)' and normalizes filenames into clean readable titles."
         )
     }
 }
@@ -393,7 +408,7 @@ private fun OnboardingPermissionsStep(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "NeatFiles operates on your real Downloads folder to delete duplicates, rename files, and move them into neat subfolders.",
+            text = "NeatFiles operates on your real Downloads folder. All Files Access is mandatory so the app can inspect, rename, organize, and delete files.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -401,7 +416,7 @@ private fun OnboardingPermissionsStep(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Storage Access Card
+        // Storage Access Card (MANDATORY)
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
@@ -423,7 +438,7 @@ private fun OnboardingPermissionsStep(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Required for moving, renaming, and cleaning downloads.",
+                            text = "Mandatory for organizing, renaming, and cleaning downloads.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -432,11 +447,11 @@ private fun OnboardingPermissionsStep(
                     // Status Badge
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = if (hasStoragePermission) Color(0xFFE8F5E9) else Color(0xFFFFF3E0)
+                        color = if (hasStoragePermission) Color(0xFFE8F5E9) else Color(0xFFFFEBEE)
                     ) {
                         Text(
-                            text = if (hasStoragePermission) "Granted" else "Required",
-                            color = if (hasStoragePermission) Color(0xFF2E7D32) else Color(0xFFE65100),
+                            text = if (hasStoragePermission) "Granted" else "Mandatory",
+                            color = if (hasStoragePermission) Color(0xFF2E7D32) else Color(0xFFC62828),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -474,7 +489,7 @@ private fun OnboardingPermissionsStep(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Grant Storage Access")
+                        Text("Grant All Files Access")
                     }
                 } else {
                     Row(
@@ -483,7 +498,7 @@ private fun OnboardingPermissionsStep(
                     ) {
                         Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Ready to access Downloads folder", color = Color(0xFF2E7D32), fontSize = 13.sp)
+                        Text("Access granted! You can now proceed.", color = Color(0xFF2E7D32), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -514,7 +529,7 @@ private fun OnboardingPermissionsStep(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Alerts when scheduled cleanup finds safe-to-remove clutter.",
+                                text = "Optional alert when scheduled cleanup detects accumulated clutter.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -559,11 +574,8 @@ private fun OnboardingPreferencesStep(
     thresholdDays: Int,
     scheduledEnabled: Boolean,
     onThresholdChange: (Int) -> Unit,
-    onToggleScheduled: (Boolean) -> Unit,
-    onGenerateSamples: () -> Unit
+    onToggleScheduled: (Boolean) -> Unit
 ) {
-    var generatedSamples by remember { mutableStateOf(false) }
-
     Column(
         horizontalAlignment = Alignment.Start,
         modifier = Modifier.fillMaxWidth()
@@ -584,10 +596,9 @@ private fun OnboardingPreferencesStep(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Retention Threshold
         Text("Old Download Retention Period", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(4.dp))
-        Text("Files untouched longer than this will be flagged as safe to review.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Files untouched longer than this period will be flagged for cleanup review.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -611,7 +622,6 @@ private fun OnboardingPreferencesStep(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Scheduled Cleanup Toggle
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -627,47 +637,12 @@ private fun OnboardingPreferencesStep(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Scheduled Background Checks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Spacer(modifier = Modifier.height(2.dp))
-                    Text("Periodically checks for duplicate and broken downloads.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Runs daily background check with Android WorkManager.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(
                     checked = scheduledEnabled,
                     onCheckedChange = onToggleScheduled
                 )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Pilot Testing / Sample Files Option
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f))
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Testing on Empty Device / Emulator?", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "If your Downloads folder is brand new, generate sample test files (duplicate PDFs, messy names, temp cache) to test real file operations immediately.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = {
-                        onGenerateSamples()
-                        generatedSamples = true
-                    },
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(if (generatedSamples) Icons.Default.Check else Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (generatedSamples) "Sample Files Created in Downloads!" else "Generate Test Files in Downloads")
-                }
             }
         }
     }
@@ -676,7 +651,7 @@ private fun OnboardingPreferencesStep(
 @Composable
 private fun OnboardingReadyStep(
     state: MainUiState,
-    onComplete: () -> Unit
+    onRedirectToPermissions: () -> Unit
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -685,11 +660,11 @@ private fun OnboardingReadyStep(
         Surface(
             modifier = Modifier.size(80.dp),
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.primary
+            color = if (state.hasStoragePermission) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = Icons.Default.Check,
+                    imageVector = if (state.hasStoragePermission) Icons.Default.Check else Icons.Default.Warning,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(40.dp)
@@ -700,7 +675,7 @@ private fun OnboardingReadyStep(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "You're All Set!",
+            text = if (state.hasStoragePermission) "You're All Set!" else "Permission Required",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
@@ -708,7 +683,11 @@ private fun OnboardingReadyStep(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "NeatFiles is configured and ready to inspect your Downloads folder.",
+            text = if (state.hasStoragePermission) {
+                "NeatFiles is configured and ready to inspect your Downloads folder."
+            } else {
+                "All Files Access has not been granted. Please return to step 2 to grant storage access."
+            },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -716,7 +695,6 @@ private fun OnboardingReadyStep(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Summary Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
@@ -730,8 +708,8 @@ private fun OnboardingReadyStep(
             ) {
                 SummaryRow(
                     label = "Storage Access",
-                    value = if (state.hasStoragePermission) "✓ Granted" else "⚠️ Permission Pending",
-                    valueColor = if (state.hasStoragePermission) Color(0xFF2E7D32) else Color(0xFFE65100)
+                    value = if (state.hasStoragePermission) "Granted" else "Missing (Required)",
+                    valueColor = if (state.hasStoragePermission) Color(0xFF2E7D32) else Color(0xFFC62828)
                 )
                 SummaryRow(
                     label = "Old Files Retention",
@@ -748,6 +726,16 @@ private fun OnboardingReadyStep(
                     value = "Documents, Images, APKs, Archives",
                     valueColor = MaterialTheme.colorScheme.onSurface
                 )
+            }
+        }
+
+        if (!state.hasStoragePermission) {
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedButton(
+                onClick = onRedirectToPermissions,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Go to Storage Permission Setup")
             }
         }
     }

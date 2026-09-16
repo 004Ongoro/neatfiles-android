@@ -20,12 +20,7 @@ class ScanDownloadsUseCase(
     private val detectCleanupCandidatesUseCase: DetectCleanupCandidatesUseCase
 ) {
     suspend operator fun invoke(): StorageOverview = withContext(Dispatchers.IO) {
-        val baseOverview = repository.scanDownloads()
-        val allFiles = repository.scanDownloads().let {
-            // Re-run intelligent analysis on current files
-            baseOverview
-        }
-        allFiles
+        repository.scanDownloads()
     }
 }
 
@@ -35,13 +30,18 @@ class DetectDuplicatesUseCase {
         val sameSizeBuckets = files.filter { it.sizeBytes > 0 }
             .groupBy { it.sizeBytes }
             .filter { it.value.size > 1 }
-
         val duplicateGroups = mutableListOf<DuplicateGroup>()
 
         for ((size, bucket) in sameSizeBuckets) {
-            // Group by quick hash or name similarities
             val hashGroups = bucket.groupBy { file ->
-                if (file.file.exists()) HashEngine.computeQuickHash(file.file) else "${file.sizeBytes}_${file.name.substringBeforeLast(".")}"
+                if (file.file.exists()) {
+                    HashEngine.computeQuickHash(file.file)
+                } else {
+                    val base = file.name.substringBeforeLast(".")
+                        .replace("""\s*\(\d+\)|\s*-\s*Copy|\s*\(copy\)|_duplicate""".toRegex(RegexOption.IGNORE_CASE), "")
+                        .trim()
+                    "${file.sizeBytes}_${base.lowercase()}.${file.extension.lowercase()}"
+                }
             }.filter { it.value.size > 1 }
 
             for ((hash, group) in hashGroups) {

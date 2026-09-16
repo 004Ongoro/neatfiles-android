@@ -20,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -34,6 +33,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,17 +46,30 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.neatfiles.app.core.model.OrganizePlan
 import com.neatfiles.app.core.util.Formatters
+import com.neatfiles.app.ui.components.AnimatedFeedbackState
+import com.neatfiles.app.ui.components.FeedbackType
 import com.neatfiles.app.ui.components.getCategoryIcon
 import com.neatfiles.app.ui.viewmodel.MainUiState
+
+private enum class OrganizerScreenState {
+    IDLE,
+    IN_PROGRESS,
+    SUCCESS,
+    ERROR
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SmartOrganizerScreen(
     state: MainUiState,
     onBackClick: () -> Unit,
-    onOrganizeClick: () -> Unit,
+    onOrganizeClick: ((Result<Int>) -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var screenState by remember { mutableStateOf(OrganizerScreenState.IDLE) }
+    var movedFileCount by remember { mutableIntStateOf(0) }
+    var errorMessage by remember { mutableStateOf("") }
+
     val plans = state.organizePlans
     val totalFiles = plans.sumOf { it.filesToMove.size }
     val totalBytes = plans.sumOf { it.totalBytes }
@@ -78,7 +95,7 @@ fun SmartOrganizerScreen(
             )
         },
         bottomBar = {
-            if (plans.isNotEmpty()) {
+            if (screenState == OrganizerScreenState.IDLE && plans.isNotEmpty() && totalFiles > 0) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -86,14 +103,25 @@ fun SmartOrganizerScreen(
                         .padding(16.dp)
                 ) {
                     Button(
-                        onClick = onOrganizeClick,
+                        onClick = {
+                            screenState = OrganizerScreenState.IN_PROGRESS
+                            onOrganizeClick { result ->
+                                result.onSuccess { count ->
+                                    movedFileCount = count
+                                    screenState = OrganizerScreenState.SUCCESS
+                                }.onFailure { err ->
+                                    errorMessage = err.message ?: "Unknown error while moving files."
+                                    screenState = OrganizerScreenState.ERROR
+                                }
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp)
                     ) {
                         Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Organize $totalFiles Files (${Formatters.formatFileSize(totalBytes)})",
+                            text = "Organize $totalFiles Files into Folders (${Formatters.formatFileSize(totalBytes)})",
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -102,66 +130,114 @@ fun SmartOrganizerScreen(
         },
         modifier = modifier
     ) { innerPadding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(innerPadding)
         ) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            when (screenState) {
+                OrganizerScreenState.IN_PROGRESS -> {
+                    AnimatedFeedbackState(
+                        feedback = FeedbackType.InProgress(
+                            title = "Organizing Downloads...",
+                            detail = "Moving $totalFiles unorganized files into dedicated category subfolders."
+                        ),
+                        modifier = Modifier.align(Alignment.Center)
                     )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp)
-                    ) {
-                        Text(
-                            text = "Smart Folder Sorting",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "NeatFiles will move loose downloads into organized subdirectories based on their content type.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
-            }
 
-            if (plans.isEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                OrganizerScreenState.SUCCESS -> {
+                    AnimatedFeedbackState(
+                        feedback = FeedbackType.Success(
+                            title = "Organization Complete!",
+                            description = if (movedFileCount > 0) {
+                                "Successfully moved $movedFileCount files into neat category subfolders (Documents, Images, APKs, Archives)."
+                            } else {
+                                "All loose files have already been organized into their respective folders."
+                            },
+                            primaryActionLabel = "Back to Dashboard"
+                        ),
+                        onPrimaryAction = onBackClick,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+
+                OrganizerScreenState.ERROR -> {
+                    AnimatedFeedbackState(
+                        feedback = FeedbackType.Error(
+                            title = "Organization Failed",
+                            message = errorMessage,
+                            retryLabel = "Try Again",
+                            dismissLabel = "Back to Dashboard"
+                        ),
+                        onPrimaryAction = {
+                            screenState = OrganizerScreenState.IN_PROGRESS
+                            onOrganizeClick { result ->
+                                result.onSuccess { count ->
+                                    movedFileCount = count
+                                    screenState = OrganizerScreenState.SUCCESS
+                                }.onFailure { err ->
+                                    errorMessage = err.message ?: "Unknown error while moving files."
+                                    screenState = OrganizerScreenState.ERROR
+                                }
+                            }
+                        },
+                        onSecondaryAction = onBackClick,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+
+                OrganizerScreenState.IDLE -> {
+                    if (plans.isEmpty() || totalFiles == 0) {
+                        AnimatedFeedbackState(
+                            feedback = FeedbackType.Empty(
+                                title = "Downloads Folder is Already Tidy!",
+                                description = "No unorganized loose files were found at the root of your Downloads folder. All files are already arranged in category directories.",
+                                actionLabel = "Back to Dashboard"
+                            ),
+                            onPrimaryAction = onBackClick,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(40.dp))
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text("All Loose Files Organized", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("No unorganized files found at the root of Downloads.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            item {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(18.dp)
+                                    ) {
+                                        Text(
+                                            text = "Smart Folder Sorting",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "NeatFiles will move unorganized downloads sitting at the root of your Downloads folder into structured subfolders.",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+
+                            items(plans) { plan ->
+                                OrganizePlanCard(plan = plan)
+                            }
                         }
                     }
                 }
-            }
-
-            items(plans) { plan ->
-                OrganizePlanCard(plan = plan)
             }
         }
     }
